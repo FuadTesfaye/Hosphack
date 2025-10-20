@@ -1,0 +1,4 @@
+root: C:\Users\DELL\Documents\innovayio\TeleMedPilot 
+path: C:\Program Files\nodejs 
+arch: 64 
+proxy: none

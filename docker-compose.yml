@@ -1,0 +1,167 @@
+version: '3.8'
+
+services:
+  # Hospital EMR Database
+  emr-db:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: hosphack-emr-db
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=HospitalEMR123!
+      - MSSQL_PID=Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - emr_data:/var/opt/mssql
+      - ./hospital-management-emr-master/Database:/docker-entrypoint-initdb.d
+    networks:
+      - hosphack-network
+
+  # Hospital EMR Application
+  hospital-emr:
+    build:
+      context: ./hospital-management-emr-master
+      dockerfile: Dockerfile
+    container_name: hosphack-hospital-emr
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=emr-db;Database=DanpheEMR;User Id=sa;Password=HospitalEMR123!;TrustServerCertificate=true;
+      - ConnectionStrings__AdminConnection=Server=emr-db;Database=DanpheAdmin;User Id=sa;Password=HospitalEMR123!;TrustServerCertificate=true;
+    ports:
+      - "5000:80"
+    depends_on:
+      - emr-db
+    networks:
+      - hosphack-network
+    restart: unless-stopped
+
+  # Telemedicine Backend Database
+  telemedicine-db:
+    image: postgres:14-alpine
+    container_name: hosphack-telemedicine-db
+    environment:
+      - POSTGRES_DB=telemedicine
+      - POSTGRES_USER=telemedicine_user
+      - POSTGRES_PASSWORD=telemedicine_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - telemedicine_data:/var/lib/postgresql/data
+    networks:
+      - hosphack-network
+
+  # VideoSDK Telehealth Database
+  telehealth-db:
+    image: postgres:14-alpine
+    container_name: hosphack-telehealth-db
+    environment:
+      - POSTGRES_DB=telehealth
+      - POSTGRES_USER=telehealth_user
+      - POSTGRES_PASSWORD=telehealth_pass
+    ports:
+      - "5433:5432"
+    volumes:
+      - telehealth_data:/var/lib/postgresql/data
+    networks:
+      - hosphack-network
+
+  # Telemedicine Backend API
+  telemedicine-backend:
+    build:
+      context: ./Telemedicine-App/BE
+      dockerfile: Dockerfile
+    container_name: hosphack-telemedicine-api
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://telemedicine_user:telemedicine_pass@telemedicine-db:5432/telemedicine
+      - JWT_SECRET=your_jwt_secret_here
+      - PORT=3001
+    ports:
+      - "3001:3001"
+    depends_on:
+      - telemedicine-db
+    networks:
+      - hosphack-network
+    restart: unless-stopped
+
+  # Telemedicine Frontend
+  telemedicine-frontend:
+    build:
+      context: ./Telemedicine-App/telemedapp
+      dockerfile: Dockerfile
+    container_name: hosphack-telemedicine-web
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+      - NODE_ENV=production
+    ports:
+      - "3000:3000"
+    depends_on:
+      - telemedicine-backend
+    networks:
+      - hosphack-network
+    restart: unless-stopped
+
+  # VideoSDK Telehealth App
+  videosdk-telehealth:
+    build:
+      context: ./VideoSDK-Web-Telehealth
+      dockerfile: Dockerfile
+    container_name: hosphack-videosdk-telehealth
+    environment:
+      - DATABASE_URL=postgresql://telehealth_user:telehealth_pass@telehealth-db:5432/telehealth
+      - DATABASE_DIRECT_URL=postgresql://telehealth_user:telehealth_pass@telehealth-db:5432/telehealth
+      - NEXTAUTH_SECRET=your_nextauth_secret_here
+      - NEXTAUTH_URL=http://localhost:3002
+      - NODE_ENV=production
+    ports:
+      - "3002:3000"
+    depends_on:
+      - telehealth-db
+    networks:
+      - hosphack-network
+    restart: unless-stopped
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: hosphack-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - hosphack-network
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: hosphack-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - hospital-emr
+      - telemedicine-frontend
+      - telemedicine-backend
+      - videosdk-telehealth
+    networks:
+      - hosphack-network
+    restart: unless-stopped
+
+volumes:
+  emr_data:
+    driver: local
+  telemedicine_data:
+    driver: local
+  telehealth_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  hosphack-network:
+    driver: bridge

@@ -1,0 +1,6 @@
+.gradient_button {
+  background: linear-gradient(180deg, #4f94fc 0%, #035fe9 100%);
+}
+.gradient_button:hover {
+  background: linear-gradient(180deg, #2c68c1 0%, #04347b 100%);
+}
