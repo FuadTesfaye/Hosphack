@@ -1,0 +1,134 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Pharmacy {
+  id              String           @id @default(cuid())
+  name            String
+  address         String
+  logoUrl         String
+  rating          Float
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  email           String           @unique
+  licenseUrl      String           @default("")
+  password        String           @default("")
+  permissions     String           @default("")
+  phone           String
+  licenseRequests LicenseRequest[]
+  medicines       Medicine[]
+
+  @@map("pharmacies")
+}
+
+model Medicine {
+  id              String      @id @default(cuid())
+  name            String
+  description     String
+  price           Float
+  stock           Int
+  expirationDate  String
+  imageUrl        String
+  category        String
+  pharmacyId      String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  requiresLicense Boolean     @default(false)
+  pharmacy        Pharmacy    @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  orderItems      OrderItem[]
+
+  @@index([pharmacyId], map: "medicines_pharmacyId_fkey")
+  @@map("medicines")
+}
+
+model Order {
+  id               String      @id @default(cuid())
+  customerEmail    String
+  customerName     String
+  customerPhone    String
+  customerAge      String      @default("")
+  customerLocation String      @default("")
+  pharmacyId       String
+  pharmacyName     String
+  status           OrderStatus @default(PROCESSING)
+  total            Float
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  items            OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id           String   @id @default(cuid())
+  orderId      String
+  medicineId   String
+  medicineName String
+  quantity     Int
+  price        Float
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  medicine     Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([medicineId], map: "order_items_medicineId_fkey")
+  @@index([orderId], map: "order_items_orderId_fkey")
+  @@map("order_items")
+}
+
+model Prescription {
+  id           String             @id @default(cuid())
+  status       PrescriptionStatus @default(PENDING_REVIEW)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  email        String
+  files        String             @default("[]")
+  notes        String             @default("")
+  patientName  String
+  pharmacyId   String
+  pharmacyName String
+  phone        String
+  uploadDate   DateTime           @default(now())
+
+  @@map("prescriptions")
+}
+
+model LicenseRequest {
+  id              String        @id @default(cuid())
+  medicineId      String
+  medicineName    String
+  customerEmail   String
+  licenseImageUrl String
+  status          LicenseStatus @default(PENDING)
+  pharmacyId      String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  pharmacy        Pharmacy      @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+
+  @@index([pharmacyId], map: "license_requests_pharmacyId_fkey")
+  @@map("license_requests")
+}
+
+enum OrderStatus {
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PrescriptionStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum LicenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}

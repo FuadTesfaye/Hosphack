@@ -48,6 +48,10 @@ app.use(express.json());
 app.get("/", (req, res) => {
   res.send("Hello World!");
 });
+
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", message: "Telemedicine API is healthy" });
+});
 app.use("/login", userLoginRoute);
 app.use("/logout", userLogoutRoute);
 app.use("/patient/register", patientRegisterRoute);
