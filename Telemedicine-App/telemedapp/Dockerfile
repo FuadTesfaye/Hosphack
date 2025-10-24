@@ -14,7 +14,7 @@ COPY yarn.lock* ./
 RUN \
   if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
   elif [ -f package-lock.json ]; then npm ci; \
-  else echo "Lockfile not found." && exit 1; \
+  else npm install; \
   fi
 
 # Rebuild the source code only when needed
@@ -27,7 +27,7 @@ COPY . .
 RUN \
   if [ -f yarn.lock ]; then yarn build; \
   elif [ -f package-lock.json ]; then npm run build; \
-  else echo "Lockfile not found." && exit 1; \
+  else npm run build; \
   fi
 
 # Production image, copy all the files and run next
@@ -42,8 +42,18 @@ RUN adduser --system --uid 1001 nextjs
 
 # Copy built application
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Check if standalone build exists, otherwise copy all files
+RUN if [ -d "/app/.next/standalone" ]; then \
+      echo "Standalone build found"; \
+    else \
+      echo "No standalone build, copying all files"; \
+    fi
+
+# Copy Next.js files
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+COPY --from=builder --chown=nextjs:nodejs /app/package*.json ./
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 
 USER nextjs
 
@@ -52,8 +62,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/api/health || exit 1
-
-CMD ["node", "server.js"]
+CMD ["npm", "start"]

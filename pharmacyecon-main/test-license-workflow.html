@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test License Workflow</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .step { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .result { background: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; }
+        input { padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 3px; width: 200px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 License Approval Workflow Test</h1>
+        
+        <div class="step">
+            <h3>Step 1: Create License Request</h3>
+            <input type="email" id="customerEmail" placeholder="Customer Email" value="test@example.com">
+            <input type="text" id="medicineName" placeholder="Medicine Name" value="Test Medicine">
+            <button onclick="createLicenseRequest()">Create License Request</button>
+            <div id="createResult" class="result"></div>
+        </div>
+        
+        <div class="step">
+            <h3>Step 2: Approve License (Admin Action)</h3>
+            <input type="text" id="licenseId" placeholder="License Request ID">
+            <button onclick="approveLicense()">Approve License</button>
+            <div id="approveResult" class="result"></div>
+        </div>
+        
+        <div class="step">
+            <h3>Step 3: Check Customer Cart</h3>
+            <input type="email" id="checkEmail" placeholder="Customer Email" value="test@example.com">
+            <button onclick="checkCart()">Check Cart</button>
+            <div id="cartResult" class="result"></div>
+        </div>
+        
+        <div class="step">
+            <h3>Debug Tools</h3>
+            <button onclick="debugAllCarts()">Debug All Carts</button>
+            <button onclick="debugLicenseRequests()">Debug License Requests</button>
+            <div id="debugResult" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001'; // Update port as needed
+        
+        async function createLicenseRequest() {
+            const email = document.getElementById('customerEmail').value;
+            const medicineName = document.getElementById('medicineName').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/license-requests`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        medicineId: 'test-med-' + Date.now(),
+                        medicineName: medicineName,
+                        customerEmail: email,
+                        licenseImageUrl: 'https://picsum.photos/400/300',
+                        pharmacyId: 'test-pharmacy'
+                    })
+                });
+                
+                const result = await response.json();
+                document.getElementById('createResult').innerHTML = 
+                    `<strong>Result:</strong> ${JSON.stringify(result, null, 2)}`;
+                
+                if (result.id) {
+                    document.getElementById('licenseId').value = result.id;
+                }
+            } catch (error) {
+                document.getElementById('createResult').innerHTML = 
+                    `<strong>Error:</strong> ${error.message}`;
+            }
+        }
+        
+        async function approveLicense() {
+            const licenseId = document.getElementById('licenseId').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/license-requests`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: licenseId,
+                        status: 'approved'
+                    })
+                });
+                
+                const result = await response.json();
+                document.getElementById('approveResult').innerHTML = 
+                    `<strong>Approval Result:</strong> ${JSON.stringify(result, null, 2)}`;
+            } catch (error) {
+                document.getElementById('approveResult').innerHTML = 
+                    `<strong>Error:</strong> ${error.message}`;
+            }
+        }
+        
+        async function checkCart() {
+            const email = document.getElementById('checkEmail').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/customer-cart?email=${encodeURIComponent(email)}`);
+                const result = await response.json();
+                
+                document.getElementById('cartResult').innerHTML = 
+                    `<strong>Cart Contents:</strong><br>
+                     Items: ${result.length}<br>
+                     Approved Items: ${result.filter(item => item.isApproved || item.licenseApproved).length}<br>
+                     <pre>${JSON.stringify(result, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('cartResult').innerHTML = 
+                    `<strong>Error:</strong> ${error.message}`;
+            }
+        }
+        
+        async function debugAllCarts() {
+            try {
+                const response = await fetch(`${API_BASE}/api/customer-cart?debug=all`);
+                const result = await response.json();
+                
+                document.getElementById('debugResult').innerHTML = 
+                    `<strong>All Carts Debug:</strong><br>
+                     <pre>${JSON.stringify(result, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('debugResult').innerHTML = 
+                    `<strong>Error:</strong> ${error.message}`;
+            }
+        }
+        
+        async function debugLicenseRequests() {
+            try {
+                const response = await fetch(`${API_BASE}/api/license-requests?debug=all`);
+                const result = await response.json();
+                
+                document.getElementById('debugResult').innerHTML = 
+                    `<strong>License Requests Debug:</strong><br>
+                     <pre>${JSON.stringify(result, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('debugResult').innerHTML = 
+                    `<strong>Error:</strong> ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
