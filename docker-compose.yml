@@ -1,6 +1,8 @@
-# Docker Compose for Hosphack Healthcare Platform
+# Docker Compose for Hosphack Healthcare Platform - All Services with Individual Backends
 
 services:
+  # ========== DATABASES ==========
+  
   # Hospital EMR Database
   emr-db:
     image: mcr.microsoft.com/mssql/server:2019-latest
@@ -13,29 +15,15 @@ services:
       - "1433:1433"
     volumes:
       - emr_data:/var/opt/mssql
-      - ./hospital-management-emr-master/Database:/docker-entrypoint-initdb.d
     networks:
       - hosphack-network
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P HospitalEMR123! -C -Q 'SELECT 1' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
-  # Hospital EMR Application
-  hospital-emr:
-    build:
-      context: ./hospital-management-emr-master
-      dockerfile: Dockerfile
-    container_name: hosphack-hospital-emr
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__DefaultConnection=Server=emr-db;Database=DanpheEMR;User Id=sa;Password=HospitalEMR123!;TrustServerCertificate=true;
-      - ConnectionStrings__AdminConnection=Server=emr-db;Database=DanpheAdmin;User Id=sa;Password=HospitalEMR123!;TrustServerCertificate=true;
-    ports:
-      - "5000:80"
-    depends_on:
-      - emr-db
-    networks:
-      - hosphack-network
-    restart: unless-stopped
-
-  # Telemedicine Backend Database
+  # Telemedicine Database
   telemedicine-db:
     image: postgres:14-alpine
     container_name: hosphack-telemedicine-db
@@ -44,11 +32,16 @@ services:
       - POSTGRES_USER=telemedicine_user
       - POSTGRES_PASSWORD=telemedicine_pass
     ports:
-      - "5432:5432"
+      - "5436:5432"
     volumes:
       - telemedicine_data:/var/lib/postgresql/data
     networks:
       - hosphack-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U telemedicine_user -d telemedicine"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   # VideoSDK Telehealth Database
   telehealth-db:
@@ -59,12 +52,60 @@ services:
       - POSTGRES_USER=telehealth_user
       - POSTGRES_PASSWORD=telehealth_pass
     ports:
-      - "5433:5432"
+      - "5435:5432"
     volumes:
       - telehealth_data:/var/lib/postgresql/data
     networks:
       - hosphack-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U telehealth_user -d telehealth"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
+  # Pharmacy Database
+  pharmacy-db:
+    image: postgres:14-alpine
+    container_name: hosphack-pharmacy-db
+    environment:
+      - POSTGRES_DB=pharmacy
+      - POSTGRES_USER=pharmacy_user
+      - POSTGRES_PASSWORD=pharmacy_pass
+    ports:
+      - "5434:5432"
+    volumes:
+      - pharmacy_data:/var/lib/postgresql/data
+    networks:
+      - hosphack-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pharmacy_user -d pharmacy"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ========== HOSPITAL EMR SYSTEM ==========
+  
+  # Hospital EMR Web Application (Simplified)
+  hospital-emr:
+    build:
+      context: ./hospital-management-emr-master
+      dockerfile: Dockerfile.simple
+    container_name: hosphack-hospital-emr
+    environment:
+      - NODE_ENV=production
+    ports:
+      - "5000:80"  # Hospital EMR Web Access
+    networks:
+      - hosphack-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ========== TELEMEDICINE SYSTEM ==========
+  
   # Telemedicine Backend API
   telemedicine-backend:
     build:
@@ -74,15 +115,21 @@ services:
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://telemedicine_user:telemedicine_pass@telemedicine-db:5432/telemedicine
-      - JWT_SECRET=your_jwt_secret_here
+      - JWT_SECRET=telemedicine_jwt_secret_2024
       - PORT=3001
     ports:
       - "3001:3001"
     depends_on:
-      - telemedicine-db
+      telemedicine-db:
+        condition: service_healthy
     networks:
       - hosphack-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Telemedicine Frontend
   telemedicine-frontend:
@@ -94,14 +141,36 @@ services:
       - NEXT_PUBLIC_API_URL=http://localhost:3001
       - NODE_ENV=production
     ports:
-      - "3000:3000"
+      - "8100:3000"
     depends_on:
       - telemedicine-backend
     networks:
       - hosphack-network
     restart: unless-stopped
 
-  # VideoSDK Telehealth App
+  # ========== VIDEOSDK TELEHEALTH SYSTEM ==========
+  
+  # VideoSDK Telehealth Backend API
+  videosdk-backend:
+    build:
+      context: ./VideoSDK-Web-Telehealth/backend
+      dockerfile: Dockerfile
+    container_name: hosphack-videosdk-api
+    environment:
+      - NODE_ENV=production
+      - PORT=4002
+    ports:
+      - "4002:4002"
+    networks:
+      - hosphack-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # VideoSDK Telehealth Frontend
   videosdk-telehealth:
     build:
       context: ./VideoSDK-Web-Telehealth
@@ -110,18 +179,63 @@ services:
     environment:
       - DATABASE_URL=postgresql://telehealth_user:telehealth_pass@telehealth-db:5432/telehealth
       - DATABASE_DIRECT_URL=postgresql://telehealth_user:telehealth_pass@telehealth-db:5432/telehealth
-      - NEXTAUTH_SECRET=your_nextauth_secret_here
-      - NEXTAUTH_URL=http://localhost:3002
+      - NEXTAUTH_SECRET=videosdk_nextauth_secret_2024
+      - NEXTAUTH_URL=http://localhost:8200
       - NODE_ENV=production
     ports:
-      - "3002:3000"
+      - "8200:3000"
     depends_on:
+      - videosdk-backend
       - telehealth-db
     networks:
       - hosphack-network
     restart: unless-stopped
 
-  # Redis for caching (optional)
+  # ========== PHARMACY MANAGEMENT SYSTEM ==========
+  
+  # Pharmacy Backend API
+  pharmacy-backend:
+    build:
+      context: ./pharmacyecon-main/backend
+      dockerfile: Dockerfile
+    container_name: hosphack-pharmacy-api
+    environment:
+      - NODE_ENV=production
+      - PORT=4003
+    ports:
+      - "4003:4003"
+    networks:
+      - hosphack-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Pharmacy Frontend
+  pharmacy-app:
+    build:
+      context: ./pharmacyecon-main
+      dockerfile: Dockerfile
+    container_name: hosphack-pharmacy-app
+    environment:
+      - DATABASE_URL=postgresql://pharmacy_user:pharmacy_pass@pharmacy-db:5432/pharmacy
+      - NODE_ENV=production
+      - NEXTAUTH_SECRET=pharmacy_nextauth_secret_2024
+      - NEXTAUTH_URL=http://localhost:8300
+    ports:
+      - "8300:3000"
+    depends_on:
+      - pharmacy-backend
+      - pharmacy-db
+    networks:
+      - hosphack-network
+    restart: unless-stopped
+
+  # ========== ADDITIONAL SERVICES ==========
+  
+  # Redis for caching
   redis:
     image: redis:7-alpine
     container_name: hosphack-redis
@@ -139,15 +253,16 @@ services:
     container_name: hosphack-nginx
     ports:
       - "80:80"
-      - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro
     depends_on:
       - hospital-emr
       - telemedicine-frontend
       - telemedicine-backend
       - videosdk-telehealth
+      - videosdk-backend
+      - pharmacy-app
+      - pharmacy-backend
     networks:
       - hosphack-network
     restart: unless-stopped
@@ -158,6 +273,8 @@ volumes:
   telemedicine_data:
     driver: local
   telehealth_data:
+    driver: local
+  pharmacy_data:
     driver: local
   redis_data:
     driver: local

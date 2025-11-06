@@ -41,8 +41,8 @@ RUN adduser --system --uid 1001 nextjs
 
 # Copy Prisma files
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma 2>/dev/null || true
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma 2>/dev/null || true
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 # Copy built application
 COPY --from=builder /app/public ./public
