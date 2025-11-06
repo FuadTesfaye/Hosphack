@@ -34,7 +34,8 @@ const emailRoute = require("./Routes/Email");
 
 const chatRoute = require("./Routes/Chat");
 const { globalErrorHanlder } = require("./Utilities");
-const port = process.env.PORT || 4000;
+const { swaggerUi, specs } = require('./swagger');
+const port = process.env.PORT || 3001;
 const app = express();
 
 app.use(
@@ -52,6 +53,9 @@ app.get("/", (req, res) => {
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok", message: "Telemedicine API is healthy" });
 });
+
+// Swagger Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 app.use("/login", userLoginRoute);
 app.use("/logout", userLogoutRoute);
 app.use("/patient/register", patientRegisterRoute);

@@ -1,1 +1,0 @@
-type PharmacySchemePriceCategoryCustomType = { SchemeId: number, PriceCategoryId: number }
