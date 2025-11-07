@@ -1,38 +1,52 @@
 import { StatCard } from '@/components/StatCard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, Calendar, Activity, DollarSign, Clock, TrendingUp } from 'lucide-react';
-import { usePatientStore } from '@/stores/patientStore';
+import { useQuery } from '@tanstack/react-query';
+import { analyticsApi, appointmentApi, billingApi } from '@/lib/api';
 
 export default function Dashboard() {
-  const patients = usePatientStore((state) => state.patients);
+  const { data: dashboardData } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: () => analyticsApi.getDashboard(),
+  });
+
+  const { data: appointmentStats } = useQuery({
+    queryKey: ['appointment-stats'],
+    queryFn: () => appointmentApi.getStatistics(),
+  });
+
+  const { data: billingStats } = useQuery({
+    queryKey: ['billing-stats'],
+    queryFn: () => billingApi.getStatistics(),
+  });
 
   const stats = [
     {
       title: 'Total Patients',
-      value: patients.length,
+      value: dashboardData?.data?.TotalPatients || 0,
       icon: Users,
       trend: { value: '+12% from last month', isPositive: true },
       variant: 'primary' as const,
     },
     {
       title: "Today's Appointments",
-      value: 24,
+      value: appointmentStats?.data?.TodayAppointments || 0,
       icon: Calendar,
-      trend: { value: '8 pending', isPositive: true },
+      trend: { value: `${appointmentStats?.data?.ThisWeekAppointments || 0} this week`, isPositive: true },
       variant: 'success' as const,
     },
     {
-      title: 'Active Treatments',
-      value: 48,
+      title: 'Total Appointments',
+      value: appointmentStats?.data?.TotalAppointments || 0,
       icon: Activity,
       trend: { value: '+5 new this week', isPositive: true },
       variant: 'default' as const,
     },
     {
       title: 'Revenue (Month)',
-      value: '$45,231',
+      value: `$${billingStats?.data?.ThisMonthRevenue?.toLocaleString() || '0'}`,
       icon: DollarSign,
-      trend: { value: '+18% from last month', isPositive: true },
+      trend: { value: `$${billingStats?.data?.PendingAmount?.toLocaleString() || '0'} pending`, isPositive: true },
       variant: 'success' as const,
     },
   ];

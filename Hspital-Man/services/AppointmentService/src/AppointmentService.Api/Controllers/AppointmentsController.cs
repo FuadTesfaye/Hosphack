@@ -88,6 +88,88 @@ public class AppointmentsController : ControllerBase
         return NoContent();
     }
 
+    [HttpGet("patient/{patientId}")]
+    public async Task<ActionResult<IEnumerable<Appointment>>> GetAppointmentsByPatient(Guid patientId)
+    {
+        return await _context.Appointments
+            .Where(a => a.PatientId == patientId)
+            .OrderBy(a => a.AppointmentDate)
+            .ToListAsync();
+    }
+
+    [HttpGet("doctor/{doctorId}")]
+    public async Task<ActionResult<IEnumerable<Appointment>>> GetAppointmentsByDoctor(Guid doctorId)
+    {
+        return await _context.Appointments
+            .Where(a => a.DoctorId == doctorId)
+            .OrderBy(a => a.AppointmentDate)
+            .ToListAsync();
+    }
+
+    [HttpGet("date/{date}")]
+    public async Task<ActionResult<IEnumerable<Appointment>>> GetAppointmentsByDate(DateTime date)
+    {
+        return await _context.Appointments
+            .Where(a => a.AppointmentDate.Date == date.Date)
+            .OrderBy(a => a.AppointmentDate)
+            .ToListAsync();
+    }
+
+    [HttpPut("{id}/status")]
+    public async Task<IActionResult> UpdateAppointmentStatus(Guid id, [FromBody] string status)
+    {
+        var appointment = await _context.Appointments.FindAsync(id);
+        if (appointment == null)
+        {
+            return NotFound();
+        }
+
+        var validStatuses = new[] { "Scheduled", "Confirmed", "InProgress", "Completed", "Cancelled", "NoShow" };
+        if (!validStatuses.Contains(status))
+        {
+            return BadRequest("Invalid status");
+        }
+
+        appointment.Status = status;
+        if (status == "Completed")
+        {
+            appointment.CompletedDate = DateTime.Now;
+        }
+
+        await _context.SaveChangesAsync(CancellationToken.None);
+        return NoContent();
+    }
+
+    [HttpGet("upcoming")]
+    public async Task<ActionResult<IEnumerable<Appointment>>> GetUpcomingAppointments()
+    {
+        return await _context.Appointments
+            .Where(a => a.AppointmentDate > DateTime.Now)
+            .OrderBy(a => a.AppointmentDate)
+            .Take(10)
+            .ToListAsync();
+    }
+
+    [HttpGet("statistics")]
+    public async Task<ActionResult<object>> GetAppointmentStatistics()
+    {
+        var today = DateTime.Today;
+        var todayAppointments = await _context.Appointments
+            .CountAsync(a => a.AppointmentDate.Date == today);
+        
+        var thisWeekAppointments = await _context.Appointments
+            .CountAsync(a => a.AppointmentDate.Date >= today && a.AppointmentDate.Date <= today.AddDays(7));
+        
+        var totalAppointments = await _context.Appointments.CountAsync();
+
+        return Ok(new
+        {
+            TodayAppointments = todayAppointments,
+            ThisWeekAppointments = thisWeekAppointments,
+            TotalAppointments = totalAppointments
+        });
+    }
+
     private bool AppointmentExists(Guid id)
     {
         return _context.Appointments.Any(e => e.Id == id);

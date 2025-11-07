@@ -71,6 +71,18 @@
       ],
       "UpstreamPathTemplate": "/analytics/{everything}",
       "UpstreamHttpMethod": [ "Get" ]
+    },
+    {
+      "DownstreamPathTemplate": "/api/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5007
+        }
+      ],
+      "UpstreamPathTemplate": "/doctors/{everything}",
+      "UpstreamHttpMethod": [ "Get", "Post", "Put", "Delete" ]
     }
   ],
   "GlobalConfiguration": {

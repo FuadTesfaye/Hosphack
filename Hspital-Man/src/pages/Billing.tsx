@@ -1,199 +1,262 @@
-import { useState, useEffect } from 'react';
-import axios from 'axios';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Search, DollarSign, FileText, Download, CreditCard } from 'lucide-react';
-import InvoiceDialog from '@/components/InvoiceDialog';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-
-interface Invoice {
-  id: string;
-  patientId: string;
-  amount: number;
-  dateOfIssue: string;
-  isPaid: boolean;
-}
-
-// A placeholder to get patient details - in a real app this would be a separate API call or a join
-const getPatientName = (patientId: string) => `Patient #${patientId.substring(0, 8)}`;
-
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Plus, Search, Filter, DollarSign, CreditCard, AlertCircle, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { billingApi } from "@/lib/api";
+import { useBillingStore } from "@/stores/billingStore";
 
 export default function Billing() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const { bills, setBills, setLoading, setError } = useBillingStore();
 
-  useEffect(() => {
-    const fetchInvoices = async () => {
-      try {
-        const response = await axios.get('/api/billing');
-        setInvoices(response.data);
-      } catch (error) {
-        console.error('Failed to fetch invoices:', error);
-      }
-    };
-    fetchInvoices();
-  }, []);
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["bills"],
+    queryFn: () => billingApi.getAll(),
+  });
 
+  const { data: unpaidData } = useQuery({
+    queryKey: ["bills-unpaid"],
+    queryFn: () => billingApi.getUnpaid(),
+  });
 
-  const getStatus = (isPaid: boolean) => (isPaid ? 'paid' : 'pending');
+  const { data: overdueData } = useQuery({
+    queryKey: ["bills-overdue"],
+    queryFn: () => billingApi.getOverdue(),
+  });
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'paid':
-        return <Badge variant="outline" className="bg-success/10 text-success border-success/20">Paid</Badge>;
-      case 'pending':
-        return <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">Pending</Badge>;
-      case 'overdue':
-        return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">Overdue</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
+  const { data: statsData } = useQuery({
+    queryKey: ["billing-stats"],
+    queryFn: () => billingApi.getStatistics(),
+  });
+
+  const { data: monthlyRevenueData } = useQuery({
+    queryKey: ["monthly-revenue"],
+    queryFn: () => billingApi.getMonthlyRevenue(),
+  });
+
+  const filteredBills = bills.filter((bill) => {
+    const matchesSearch = bill.patientId.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = 
+      statusFilter === "all" || 
+      (statusFilter === "paid" && bill.isPaid) ||
+      (statusFilter === "unpaid" && !bill.isPaid);
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  const isOverdue = (billingDate: string, isPaid: boolean) => {
+    if (isPaid) return false;
+    const billing = new Date(billingDate);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    return billing < thirtyDaysAgo;
   };
-
-  const filteredInvoices = searchQuery
-    ? invoices.filter(
-        (inv) =>
-          getPatientName(inv.patientId).toLowerCase().includes(searchQuery.toLowerCase()) ||
-          inv.id.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : invoices;
-
-  const totalRevenue = invoices.reduce((sum, inv) => sum + inv.amount, 0);
-  const paidAmount = invoices
-    .filter((inv) => inv.isPaid)
-    .reduce((sum, inv) => sum + inv.amount, 0);
-  const pendingAmount = invoices
-    .filter((inv) => !inv.isPaid)
-    .reduce((sum, inv) => sum + inv.amount, 0);
-
-  // Note: Overdue is not directly supported by the current backend model, so we'll treat pending as the same for now.
-  const overdueAmount = 0;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight bg-gradient-primary bg-clip-text text-transparent">
-            Billing & Invoices
-          </h2>
-          <p className="text-muted-foreground">Manage payments and generate invoices</p>
+          <h1 className="text-3xl font-bold">Billing & Payments</h1>
+          <p className="text-muted-foreground">Manage patient bills and track payments</p>
         </div>
-        <InvoiceDialog />
+        <Button>
+          <Plus className="mr-2 h-4 w-4" />
+          Generate Bill
+        </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-5 w-5 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${totalRevenue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">This month</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Paid</CardTitle>
-            <CreditCard className="h-5 w-5 text-success" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-success">${paidAmount.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">
-              {invoices.filter((i) => i.isPaid).length} invoices
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <FileText className="h-5 w-5 text-warning" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-warning">${pendingAmount.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">
-              {invoices.filter((i) => !i.isPaid).length} invoices
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overdue</CardTitle>
-            <FileText className="h-5 w-5 text-destructive" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">${overdueAmount.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">
-              0 invoices
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>All Invoices</CardTitle>
-          <CardDescription>Complete list of patient invoices</CardDescription>
-          <div className="pt-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search by patient name or invoice ID..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Revenue</p>
+                <p className="text-2xl font-bold">${statsData?.data?.TotalRevenue?.toLocaleString() || '0'}</p>
+              </div>
+              <DollarSign className="h-8 w-8 text-green-500" />
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Invoice ID</TableHead>
-                <TableHead>Patient</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredInvoices.map((invoice) => (
-                <TableRow key={invoice.id} className="hover:bg-accent/50">
-                  <TableCell className="font-medium">{invoice.id.substring(0,8)}</TableCell>
-                  <TableCell>{getPatientName(invoice.patientId)}</TableCell>
-                  <TableCell>{new Date(invoice.dateOfIssue).toLocaleDateString()}</TableCell>
-                  <TableCell className="font-bold">${invoice.amount.toFixed(2)}</TableCell>
-                  <TableCell>{getStatusBadge(getStatus(invoice.isPaid))}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm">
-                        <Download className="h-4 w-4" />
-                      </Button>
-                      {!invoice.isPaid && (
-                        <Button size="sm">Pay</Button>
-                      )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">This Month</p>
+                <p className="text-2xl font-bold">${statsData?.data?.ThisMonthRevenue?.toLocaleString() || '0'}</p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-blue-500" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Pending Amount</p>
+                <p className="text-2xl font-bold text-yellow-600">${statsData?.data?.PendingAmount?.toLocaleString() || '0'}</p>
+              </div>
+              <CreditCard className="h-8 w-8 text-yellow-500" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Unpaid Bills</p>
+                <p className="text-2xl font-bold text-red-600">{statsData?.data?.UnpaidBills || 0}</p>
+              </div>
+              <AlertCircle className="h-8 w-8 text-red-500" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by patient ID..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Bills</SelectItem>
+            <SelectItem value="paid">Paid</SelectItem>
+            <SelectItem value="unpaid">Unpaid</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button variant="outline">
+          <Filter className="mr-2 h-4 w-4" />
+          More Filters
+        </Button>
+      </div>
+
+      {/* Bills List */}
+      {isLoading ? (
+        <div className="grid gap-4">
+          {[...Array(5)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardContent className="p-4">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-2 flex-1">
+                    <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+                  </div>
+                  <div className="h-6 bg-gray-200 rounded w-20"></div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {filteredBills.map((bill) => {
+            const overdue = isOverdue(bill.billingDate, bill.isPaid);
+            
+            return (
+              <Card key={bill.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-2 flex-1">
+                      <div className="flex items-center gap-4">
+                        <div>
+                          <h3 className="font-semibold">Bill #{bill.id.slice(0, 8)}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            Patient ID: {bill.patientId.slice(0, 8)}...
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6 text-sm text-muted-foreground">
+                        <div>
+                          <span className="font-medium">Billing Date:</span> {new Date(bill.billingDate).toLocaleDateString()}
+                        </div>
+                        <div>
+                          <span className="font-medium">Amount:</span> ${bill.amount.toLocaleString()}
+                        </div>
+                        {overdue && (
+                          <Badge className="bg-red-100 text-red-800" variant="secondary">
+                            Overdue
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                  </TableCell>
-                </TableRow>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold">${bill.amount.toLocaleString()}</span>
+                      <Badge 
+                        className={bill.isPaid 
+                          ? "bg-green-100 text-green-800" 
+                          : "bg-yellow-100 text-yellow-800"
+                        }
+                        variant="secondary"
+                      >
+                        {bill.isPaid ? "Paid" : "Unpaid"}
+                      </Badge>
+                    </div>
+                  </div>
+                  
+                  {!bill.isPaid && (
+                    <div className="mt-4 pt-4 border-t flex gap-2">
+                      <Button size="sm" variant="outline">
+                        Send Reminder
+                      </Button>
+                      <Button size="sm">
+                        Mark as Paid
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {filteredBills.length === 0 && !isLoading && (
+        <div className="text-center py-12">
+          <DollarSign className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-lg font-medium">No bills found</p>
+          <p className="text-muted-foreground">
+            {searchTerm || statusFilter !== "all" 
+              ? "Try adjusting your search or filters" 
+              : "Generate your first bill to get started"
+            }
+          </p>
+        </div>
+      )}
+
+      {/* Monthly Revenue Chart Section */}
+      {monthlyRevenueData?.data && monthlyRevenueData.data.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Monthly Revenue Trend</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+              {monthlyRevenueData.data.map((month: any) => (
+                <div key={month.Month} className="text-center">
+                  <p className="text-sm text-muted-foreground">Month {month.Month}</p>
+                  <p className="text-lg font-bold">${month.Revenue?.toLocaleString() || '0'}</p>
+                </div>
               ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

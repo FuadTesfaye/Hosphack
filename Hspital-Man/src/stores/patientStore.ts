@@ -21,6 +21,7 @@ export interface Patient {
 
 interface PatientStore {
   patients: Patient[];
+  setPatients: (patients: Patient[]) => void;
   addPatient: (patient: Patient) => void;
   updatePatient: (id: string, patient: Partial<Patient>) => void;
   deletePatient: (id: string) => void;
@@ -83,6 +84,8 @@ export const usePatientStore = create<PatientStore>((set, get) => ({
       registrationDate: '2024-03-10',
     },
   ],
+  
+  setPatients: (patients) => set({ patients }),
   
   addPatient: (patient) =>
     set((state) => ({
