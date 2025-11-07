@@ -8,6 +8,8 @@ import Dashboard from "./pages/Dashboard";
 import Patients from "./pages/Patients";
 import PatientRegistration from "./pages/PatientRegistration";
 import PatientDetail from "./pages/PatientDetail";
+import Doctors from "./pages/Doctors";
+import DoctorRegistration from "./pages/DoctorRegistration";
 import Appointments from "./pages/Appointments";
 import MedicalRecords from "./pages/MedicalRecords";
 import MedicalRecordDetail from "./pages/MedicalRecordDetail";
@@ -31,6 +33,8 @@ const App = () => (
             <Route path="/patients" element={<Patients />} />
             <Route path="/patients/register" element={<PatientRegistration />} />
             <Route path="/patients/:id" element={<PatientDetail />} />
+            <Route path="/doctors" element={<Doctors />} />
+            <Route path="/doctors/register" element={<DoctorRegistration />} />
             <Route path="/appointments" element={<Appointments />} />
             <Route path="/records" element={<MedicalRecords />} />
             <Route path="/records/:id" element={<MedicalRecordDetail />} />

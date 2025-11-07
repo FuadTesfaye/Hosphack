@@ -1,6 +1,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { patientSchema, type PatientFormData } from '@/schemas/patientSchema';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,31 +9,44 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
-import axios from 'axios';
-import { API_GATEWAY_URL } from '@/lib/api';
+import { patientApi } from '@/lib/api';
 
 export default function PatientRegistration() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-    setValue,
-  } = useForm<PatientFormData>({
+  const form = useForm<PatientFormData>({
     resolver: zodResolver(patientSchema),
+    defaultValues: {
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
+      dateOfBirth: '',
+      gender: 'Male',
+      address: '',
+      emergencyContact: '',
+      emergencyPhone: '',
+    },
   });
 
-  const onSubmit = async (data: PatientFormData) => {
-    try {
-      await axios.post(`${API_GATEWAY_URL}/patients`, data);
+  const mutation = useMutation({
+    mutationFn: patientApi.create,
+    onSuccess: () => {
       toast.success('Patient registered successfully!');
+      queryClient.invalidateQueries({ queryKey: ['patients'] });
       navigate('/patients');
-    } catch (error) {
-      toast.error('Failed to register patient. Please try again.');
-    }
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Failed to register patient');
+    },
+  });
+
+  const onSubmit = (data: PatientFormData) => {
+    mutation.mutate(data);
   };
 
   return (

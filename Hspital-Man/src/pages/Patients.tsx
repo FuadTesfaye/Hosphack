@@ -1,23 +1,29 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Search, Plus, Mail, Phone, Calendar, User } from 'lucide-react';
-import axios from 'axios';
-import { API_GATEWAY_URL } from '@/lib/api';
+import { patientApi } from '@/lib/api';
+import { usePatientStore } from '@/stores/patientStore';
 
 export default function Patients() {
   const navigate = useNavigate();
-  const [patients, setPatients] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const { patients, setPatients } = usePatientStore();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['patients'],
+    queryFn: () => patientApi.getAll(),
+  });
 
   useEffect(() => {
-    axios.get(`${API_GATEWAY_URL}/patients`).then((response) => {
-      setPatients(response.data);
-    });
-  }, []);
+    if (data?.data) {
+      setPatients(data.data);
+    }
+  }, [data, setPatients]);
 
   const displayedPatients = searchQuery
     ? patients.filter((patient: any) =>
@@ -52,8 +58,26 @@ export default function Patients() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {displayedPatients.map((patient: any) => (
+      {isLoading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[...Array(6)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader>
+                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div className="h-3 bg-gray-200 rounded"></div>
+                  <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+                </div>
+              </CardContent>
+            </Card>
+            ))}
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {displayedPatients.map((patient: any) => (
           <Card key={patient.id} className="transition-all hover:shadow-md cursor-pointer" onClick={() => navigate(`/patients/${patient.id}`)}>
             <CardHeader>
               <div className="flex items-start justify-between">
@@ -85,8 +109,9 @@ export default function Patients() {
               </div>
             </CardContent>
           </Card>
-        ))}
-      </div>
+        )))}
+        </div>
+      )}
 
       {displayedPatients.length === 0 && (
         <Card>

@@ -1,6 +1,7 @@
 import { 
   LayoutDashboard, 
   Users, 
+  UserCheck,
   Calendar, 
   FileText, 
   Package, 
@@ -24,6 +25,7 @@ import {
 const navigationItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
   { title: 'Patients', url: '/patients', icon: Users },
+  { title: 'Doctors', url: '/doctors', icon: UserCheck },
   { title: 'Appointments', url: '/appointments', icon: Calendar },
   { title: 'Medical Records', url: '/records', icon: FileText },
   { title: 'Inventory', url: '/inventory', icon: Package },
